@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mid-Semester Check-In Writer</title>
+</head>
+<body>
+    <h1>Generate Mid-Semester Check-In Emails</h1>
+    
+    <label for="nameSelect">Write Email for: </label>
+    <select id="nameSelect">
+        <option value="">Select a Name</option>
+    </select>
+    <button onclick="lookup()">Generate</button>
+
+    <h2>Email:</h2>
+    <p id="result">No Name Selected</p>
+
+<script>
+function parseCSV(text) {
+    const lines = text.split('\n');
+    const headers = lines[0].split(',');
+    const data = lines.slice(1).map(line => {
+        const values = line.split(',');
+        let entry = {};
+        headers.forEach((header, i) => {
+            entry[header.trim()] = values[i] ? values[i].trim() : "";
+        });
+        return entry;
+    });
+    return data;
+}
+
+function populateDropdown(data) {
+    const nameSelect = document.getElementById('nameSelect');
+    data.forEach(person => {
+        const option = document.createElement('option');
+        option.value = person.Name;
+        option.text = person.Name;
+        nameSelect.appendChild(option);
+    });
+}
+
+async function generateEmail(selectedName, trackingData) {
+    const person = trackingData.find(entry => entry.Name === selectedName);
+    if (person) {
+        let firstName = selectedName.split(' ')[0];
+        let emailAddress = person.Email;
+        let historyStatus = person.History === "Complete" ? "You <strong>have</strong> completed your history requirement." : "You <strong>have not</strong> completed your history requirement.";
+        let majorStatus = person["Major Service"] === "Complete" ? "You <strong>have</strong> completed your major service requirement" : "You <strong>have not</strong> completed your major service requirement";
+        let minorStatus = person["Minor Services (2)"] === "Complete" ? "You <strong>have</strong> completed your minor service requirements" : "You <strong>have not</strong> completed your minor service requirements";
+        let duesStatus = person.Dues === "Complete" ? "Our records show your dues requirement is <strong>complete</strong>." : 'Our records show your dues requirement is <strong>incomplete</strong>. Remember that you can also use a no questions asked fee waiver or a partial payment plan. Please see the email or Slack message from Christoph Schoer (<a href="mailto:mbt3xq@virginia.edu">mbt3xq@virginia.edu</a>) for details.';
+        let secondFullStatus = person["Second Full Meeting"] === "Complete" ? "You <strong>have</strong> completed your second full meeting requirement." : "You <strong>have not</strong> completed your second full meeting requirement. You can satisfy this requirement by staying from 8pm until the end of floor lits on Thursdays, or by attending the full duration of a Sunday meeting.";
+        let attendancePoints = person.Attendance;
+        let pointsRemaining = 11 - Number(attendancePoints);
+
+        let litStatus = person.Lit === "Complete" ? "You <strong>have</strong> completed your literary presentation." : "You <strong>have not</strong> completed your literary presentation.";
+        let litDate = "";
+        let debateStatus = person.Debate === "Complete" ? "You <strong>have</strong> completed your debate." : "You <strong>have not</strong> completed your debate.";
+        let debateDate = "";
+
+        let bigName = "Couldn't find big????"; // default value in case not found
+
+        try {
+            // get big info
+            const blResponse = await fetch('F24 Mastersheet - B_L Matches.csv');
+            const blText = await blResponse.text();
+            const blData = parseCSV(blText);
+
+            blData.forEach(row => {
+                if (Object.values(row).includes(selectedName)) {
+                    bigName = row.Big;
+                }
+            });
+
+            // get lit dates
+            const litResponse = await fetch('Provies Scheduled - lits.csv');
+            const litText = await litResponse.text();
+            const litData = parseCSV(litText);
+
+            litData.forEach(row => {
+                Object.keys(row).forEach(date => {
+                    if (row[date] === selectedName) {
+                        litDate = `Your lit is scheduled for <strong>${date}/24</strong>.`;
+                    }
+                });
+            });
+
+            // get debate dates
+            const debateResponse = await fetch('Provies Scheduled - debates.csv');
+            const debateText = await debateResponse.text();
+            const debateData = parseCSV(debateText);
+
+            debateData.forEach(row => {
+                Object.keys(row).forEach(date => {
+                    if (row[date] === selectedName) {
+                        debateDate = `Your debate is scheduled for <strong>${date}/24</strong>.`;
+                    }
+                });
+            });
+
+    // Output template
+    outputStr = `Email Address: ${emailAddress}<br>Big to CC: ${bigName}<br><br><br>
+
+Hey ${firstName},<br><br>
+
+This is a check-in to let you know where you’re at in regards to your Provisional Membership Requirements for the Wash. If you think anything listed in our <a href="https://docs.google.com/spreadsheets/d/1TuPmWizFNmwYAX0kSaSUOsNF_IEM5DyEnY27tQmlBxI/pubhtml?gid=1464528326&single=true">records</a> or in this email is incorrect, please reach out.<br><br>
+
+Our records show that you have <strong>${attendancePoints}</strong> attendance points. You must receive <strong>${pointsRemaining}</strong> more to meet your final requirement of <strong>11</strong>. There are <strong>still 11</strong> remaining attendance points available at regular meetings, plus one extra point available at the Harrison Debate on 10/25 at 8pm in Jeff Hall.<br><br>
+
+You <strong>have</strong> completed your first full meeting requirement. ${secondFullStatus}<br><br>
+
+${litStatus} ${litDate} ${debateStatus} ${debateDate}<br><br>
+
+${majorStatus}. ${minorStatus}. <a href="https://docs.google.com/document/d/1nvH70-8g32oXTUs_FEPkOKJUhWnjXSfW2mlEjVdONzI/edit?usp=sharing">Check this doc</a> if you would like more info on services.<br><br>
+
+${historyStatus} If you were unable to attend the history tour on 10/18, please reach out to our historian, Susannah Baker (<a href="mailto:and6br@virginia.edu">and6br@virginia.edu</a>).<br><br>
+
+${duesStatus}<br><br>
+
+There’s a ton of fun events coming up this semester! Mark your calendars:
+<ul>
+<li>10/25 Harrison Debate (Get an attendance point!)</li>
+<li>11/7 Whethermen Debate</li>
+<li>11/21 Your Inductions! (this is <strong><u>mandatory</u></strong> for all provies!)</li>
+<li>11/23 Inductions Party</li>
+<li>12/5 Elections</li>
+</ul>
+There’s so much more we could add in here, but we’ll end with this: it’s gonna be a great second half of the semester, and we can’t wait to have you along for the ride! Let us know if you have any questions or concerns about your requirements or any upcoming events!<br><br>
+
+QFDQMC,<br>
+______________
+`;
+        document.getElementById('result').innerHTML = outputStr;
+
+        } catch (error) {
+            console.error('Error fetching CSV data:', error);
+            document.getElementById('result').innerText = "Error loading data???? try again.";
+        }
+
+    } else {
+        document.getElementById('result').innerText = "Name not found??????";
+    }
+}
+
+function lookup() {
+    const nameSelect = document.getElementById('nameSelect');
+    const selectedName = nameSelect.value;
+
+    if (!selectedName) {
+        document.getElementById('result').innerText = "Please select a name.";
+        return;
+    }
+
+    fetch('F24 Mastersheet - Requirements Tracking.csv')
+        .then(response => response.text())
+        .then(text => {
+            const trackingData = parseCSV(text);
+            generateEmail(selectedName, trackingData);
+        })
+        .catch(error => {
+            console.error('Error fetching the CSV:', error);
+            document.getElementById('result').innerText = "Error loading CSV file????????";
+        });
+}
+
+// Startup function
+window.onload = function() {
+    fetch('F24 Mastersheet - Requirements Tracking.csv')
+        .then(response => response.text())
+        .then(text => {
+            const data = parseCSV(text);
+            populateDropdown(data);
+        })
+        .catch(error => {
+            console.error('Error fetching the CSV:', error);
+        });
+};
+</script>
+</body>
+</html>
